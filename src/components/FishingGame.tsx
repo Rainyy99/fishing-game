@@ -15,8 +15,10 @@ import {
   startCast,
   type Cast,
   type CastResult,
+  type Loadout,
 } from "@/game/engine";
 import { FishSvg } from "./FishSvg";
+import { GearPanel } from "./GearPanel";
 import { Scene, type ScenePhase } from "./Scene";
 
 interface View {
@@ -27,10 +29,6 @@ interface View {
 }
 
 const INITIAL_VIEW: View = { phase: "idle", cast: null, result: null, points: 0 };
-
-const location = getLocation(DEFAULT_LOADOUT.locationId);
-const rod = getRod(DEFAULT_LOADOUT.rodId);
-const bait = getBait(DEFAULT_LOADOUT.baitId);
 
 const STATUS_TEXT: Record<ScenePhase, string> = {
   idle: "Tap Cast to throw your line.",
@@ -129,6 +127,8 @@ function SoonChip({ label }: { label: string }) {
 
 export function FishingGame() {
   const [view, setView] = useState<View>(INITIAL_VIEW);
+  const [loadout, setLoadout] = useState<Loadout>(DEFAULT_LOADOUT);
+  const [gearOpen, setGearOpen] = useState(false);
   const timers = useRef<number[]>([]);
   const live = useRef<{ phase: ScenePhase; cast: Cast | null; biteAt: number }>({
     phase: "idle",
@@ -162,7 +162,7 @@ export function FishingGame() {
 
   const startNewCast = useCallback(() => {
     clearTimers();
-    const cast = startCast(DEFAULT_LOADOUT);
+    const cast = startCast(loadout);
     live.current = { phase: "waiting", cast, biteAt: 0 };
     setView((v) => ({ ...v, phase: "waiting", cast, result: null }));
 
@@ -186,7 +186,7 @@ export function FishingGame() {
         );
       }, cast.biteDelayMs),
     );
-  }, [clearTimers, finish]);
+  }, [clearTimers, finish, loadout]);
 
   const act = useCallback(() => {
     const { phase, cast, biteAt } = live.current;
@@ -212,6 +212,11 @@ export function FishingGame() {
       act();
     }
   };
+
+  const location = getLocation(loadout.locationId);
+  const rod = getRod(loadout.rodId);
+  const bait = getBait(loadout.baitId);
+  const busy = view.phase === "waiting" || view.phase === "bite";
 
   return (
     <main
@@ -247,9 +252,21 @@ export function FishingGame() {
           </div>
         )}
       </div>
-      <p className="text-center text-xs text-slate-400">
+      <button
+        type="button"
+        data-testid="gear-open"
+        disabled={busy}
+        onClick={() => setGearOpen(true)}
+        className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-center text-xs font-semibold text-slate-200 disabled:opacity-50"
+      >
         {location.name} · {rod.name} · {bait.name}
-      </p>
+        {loadout.accessoryIds.length > 0
+          ? ` · +${loadout.accessoryIds.length}`
+          : ""}
+        <span className={`ml-2 text-sky-300 ${busy ? "invisible" : ""}`}>
+          Change gear
+        </span>
+      </button>
 
       <p aria-live="polite" className="min-h-6 text-center text-sm text-slate-300">
         {STATUS_TEXT[view.phase]}
@@ -277,6 +294,13 @@ export function FishingGame() {
       <footer className="mt-auto pt-6 text-center text-[11px] text-slate-500">
         Free-play beta. No wallet needed.
       </footer>
+      {gearOpen && (
+        <GearPanel
+          loadout={loadout}
+          onChange={setLoadout}
+          onClose={() => setGearOpen(false)}
+        />
+      )}
     </main>
   );
 }
