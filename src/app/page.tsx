@@ -1,5 +1,5 @@
-import { FishingGame } from "@/components/FishingGame";
+import { App } from "@/components/App";
 
 export default function Home() {
-  return <FishingGame />;
+  return <App />;
 }
