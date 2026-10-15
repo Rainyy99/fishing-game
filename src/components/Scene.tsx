@@ -36,10 +36,12 @@ function wavePath(y: number): string {
 
 interface SceneProps {
   phase: ScenePhase;
+  /** A fish took the bait and got away. */
+  eaten?: boolean;
 }
 
 /** The night lake. Purely decorative: the game state is announced in text elsewhere. */
-export function Scene({ phase }: SceneProps) {
+export function Scene({ phase, eaten = false }: SceneProps) {
   const inWater = phase === "waiting" || phase === "bite";
   const biting = phase === "bite";
 
@@ -135,7 +137,35 @@ export function Scene({ phase }: SceneProps) {
       />
       <circle cx="262" cy="120" r="2.5" fill="#7dd3fc" />
       <path d={line} stroke="#e2e8f0" strokeOpacity="0.7" strokeWidth="1.2" fill="none" />
-      {!inWater && <circle cx="258" cy="176" r="2" fill="#cbd5e1" />}
+      {!inWater && !eaten && <circle cx="258" cy="176" r="2" fill="#cbd5e1" />}
+      {!inWater && eaten && (
+        <>
+          <path
+            d="M258 176 v7 a4 4 0 1 1 -4 -3"
+            stroke="#cbd5e1"
+            strokeWidth="1.5"
+            fill="none"
+            strokeLinecap="round"
+          />
+          {[
+            [250, 192, 3, 0],
+            [264, 200, 2.2, 0.15],
+            [256, 208, 1.6, 0.3],
+          ].map(([x, y, r, delay]) => (
+            <circle
+              key={`${x}-${y}`}
+              className="pop"
+              cx={x}
+              cy={y}
+              r={r}
+              fill="none"
+              stroke="#bae6fd"
+              strokeWidth="1.2"
+              style={{ animationDelay: `${delay}s` }}
+            />
+          ))}
+        </>
+      )}
 
       {inWater &&
         (biting ? [0, 0.27, 0.54] : [0, 1.2]).map((delay) => (

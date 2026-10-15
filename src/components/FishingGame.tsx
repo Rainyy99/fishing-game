@@ -70,11 +70,11 @@ function ResultPanel({ cast, result }: { cast: Cast; result: CastResult }) {
       break;
     case "escaped":
       title = "It got away!";
-      body = `The ${describe(cast)} slipped off the hook.`;
+      body = `The ${describe(cast)} took your bait and slipped off the hook.`;
       break;
     case "too-late":
-      title = "Too slow!";
-      body = `The ${describe(cast)} swam away.`;
+      title = "Bait eaten!";
+      body = `The ${describe(cast)} ate your bait and swam off.`;
       break;
     case "too-early":
       title = "Too early!";
@@ -85,13 +85,13 @@ function ResultPanel({ cast, result }: { cast: Cast; result: CastResult }) {
   return (
     <div
       role="status"
-      className="result-in rounded-2xl border bg-slate-950/85 p-3 text-center backdrop-blur-sm"
+      className="result-in rounded-2xl border bg-slate-950/85 p-2.5 text-center backdrop-blur-sm"
       style={{ borderColor: caught ? info.color : "rgba(255,255,255,0.12)" }}
     >
       {result.outcome !== "too-early" && (
         <FishSvg
           fish={cast.fish}
-          className={`mx-auto h-auto w-32 ${caught ? "" : "opacity-40 grayscale"}`}
+          className={`mx-auto h-auto w-24 ${caught ? "" : "opacity-40 grayscale"}`}
         />
       )}
       <p
@@ -245,7 +245,14 @@ export function FishingGame() {
       </div>
 
       <div className="relative overflow-hidden rounded-3xl border border-white/10 shadow-[0_0_40px_rgba(56,189,248,0.12)]">
-        <Scene phase={view.phase} />
+        <Scene
+          phase={view.phase}
+          eaten={
+            view.phase === "result" &&
+            (view.result?.outcome === "too-late" ||
+              view.result?.outcome === "escaped")
+          }
+        />
         {view.phase === "result" && view.cast && view.result && (
           <div className="absolute inset-x-3 bottom-3">
             <ResultPanel cast={view.cast} result={view.result} />
@@ -257,14 +264,16 @@ export function FishingGame() {
         data-testid="gear-open"
         disabled={busy}
         onClick={() => setGearOpen(true)}
-        className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-center text-xs font-semibold text-slate-200 disabled:opacity-50"
+        className="flex items-center justify-between gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 disabled:opacity-50"
       >
-        {location.name} · {rod.name} · {bait.name}
-        {loadout.accessoryIds.length > 0
-          ? ` · +${loadout.accessoryIds.length}`
-          : ""}
-        <span className={`ml-2 text-sky-300 ${busy ? "invisible" : ""}`}>
-          Change gear
+        <span className="truncate">
+          {location.name} · {rod.name} · {bait.name}
+          {loadout.accessoryIds.length > 0
+            ? ` · +${loadout.accessoryIds.length}`
+            : ""}
+        </span>
+        <span className={`shrink-0 text-sky-300 ${busy ? "invisible" : ""}`}>
+          Change
         </span>
       </button>
 
