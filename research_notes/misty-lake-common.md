@@ -33,8 +33,12 @@
 - Golden brown to olive back, white/silver belly, RED eyes; rows of dark dots along sides
 - Two dorsal fins joined; 6 anal spines (others usually 3)
 
-## Brown Bullhead (Ameiurus nebulosus) — NOT YET RESEARCHED (fetch hit session limit)
-- From general knowledge, to verify: ~20-35 cm; scaleless; 8 barbels; squared/slightly notched tail; mottled brown-olive
+## Brown Bullhead (Ameiurus nebulosus)
+- Typical 20-50 cm, most < 1 kg; max 53 cm / 3.6 kg; IGFA 3.3 kg
+- Stout, SCALELESS body; dark brown-green back fading to yellow-green sides, cream belly; dark brown-black speckles
+- 8 barbels (chin barbels black to yellowish-brown); slightly subterminal mouth
+- Tail only slightly notched; one small adipose fin; stiff dorsal spine and serrated pectoral spines
+- Fight: spirited but not especially strong; bottom feeder
 
 ## White Sucker (Catostomus commersonii)
 - Typical 30-51 cm, 0.9-2.7 kg; IGFA 2.9 kg (1984, Rainy River, Minnesota)
