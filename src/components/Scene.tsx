@@ -1,4 +1,4 @@
-export type ScenePhase = "idle" | "waiting" | "bite" | "result";
+export type ScenePhase = "idle" | "waiting" | "bite" | "fight" | "result";
 
 // x, y, radius, animation delay (s)
 const STARS: ReadonlyArray<readonly [number, number, number, number]> = [
@@ -42,8 +42,8 @@ interface SceneProps {
 
 /** The night lake. Purely decorative: the game state is announced in text elsewhere. */
 export function Scene({ phase, eaten = false }: SceneProps) {
-  const inWater = phase === "waiting" || phase === "bite";
-  const biting = phase === "bite";
+  const inWater = phase === "waiting" || phase === "bite" || phase === "fight";
+  const biting = phase === "bite" || phase === "fight";
 
   const line = !inWater
     ? "M262 120 Q266 150 258 176"

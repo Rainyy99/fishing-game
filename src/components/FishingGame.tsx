@@ -1,15 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { MouseEvent, PointerEvent } from "react";
+import type { KeyboardEvent, MouseEvent, PointerEvent } from "react";
 import { RARITY_INFO, getBait, getLocation, getRod } from "@/game/data";
 import {
+  fightResult,
   resolveCast,
+  resolveHook,
   startCast,
   type Cast,
   type CastResult,
   type Loadout,
 } from "@/game/engine";
+import { createFight, stepFight, type FightState } from "@/game/fight";
 import { applyCastResult, fishValue, withLoadout } from "@/game/save";
 import { updateSave, useSave } from "@/game/store";
 import { FishSvg } from "./FishSvg";
@@ -27,14 +30,16 @@ const INITIAL_VIEW: View = { phase: "idle", cast: null, result: null };
 const STATUS_TEXT: Record<ScenePhase, string> = {
   idle: "Tap Cast to throw your line.",
   waiting: "Waiting for a bite... do not tap yet!",
-  bite: "Fish on! Tap now!",
+  bite: "Fish on! Tap now to set the hook!",
+  fight: "Hold to reel. Let go when the line sings!",
   result: "Ready for another cast?",
 };
 
 const BUTTON_LABEL: Record<ScenePhase, string> = {
   idle: "Cast",
   waiting: "Waiting...",
-  bite: "REEL IN!",
+  bite: "SET THE HOOK!",
+  fight: "HOLD TO REEL",
   result: "Cast again",
 };
 
@@ -43,6 +48,7 @@ const BUTTON_STYLE: Record<ScenePhase, string> = {
   result: "bg-gradient-to-r from-sky-400 to-cyan-300 text-slate-950",
   waiting: "border border-white/15 bg-white/10 text-slate-300",
   bite: "animate-pulse bg-gradient-to-r from-rose-500 to-amber-400 text-white",
+  fight: "bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950",
 };
 
 function describe(cast: Cast): string {
@@ -65,6 +71,10 @@ function ResultPanel({ cast, result }: { cast: Cast; result: CastResult }) {
     case "escaped":
       title = "It got away!";
       body = `The ${describe(cast)} took your bait and slipped off the hook.`;
+      break;
+    case "snapped":
+      title = "Line snapped!";
+      body = `You pulled too hard. The ${describe(cast)} snapped the line.`;
       break;
     case "too-late":
       title = "Bait eaten!";
@@ -108,7 +118,10 @@ export function FishingGame() {
   const { loadout } = useSave();
   const [view, setView] = useState<View>(INITIAL_VIEW);
   const [gearOpen, setGearOpen] = useState(false);
+  const [fightUi, setFightUi] = useState({ tension: 0, progress: 0, surging: false });
   const timers = useRef<number[]>([]);
+  const raf = useRef(0);
+  const holding = useRef(false);
   const live = useRef<{ phase: ScenePhase; cast: Cast | null; biteAt: number }>({
     phase: "idle",
     cast: null,
@@ -118,13 +131,16 @@ export function FishingGame() {
   const clearTimers = useCallback(() => {
     timers.current.forEach((id) => window.clearTimeout(id));
     timers.current = [];
+    window.cancelAnimationFrame(raf.current);
+    holding.current = false;
   }, []);
 
   useEffect(() => clearTimers, [clearTimers]);
 
   const finish = useCallback(
     (cast: Cast, result: CastResult) => {
-      if (live.current.phase !== "waiting" && live.current.phase !== "bite") {
+      const { phase } = live.current;
+      if (phase !== "waiting" && phase !== "bite" && phase !== "fight") {
         return;
       }
       clearTimers();
@@ -133,6 +149,31 @@ export function FishingGame() {
       setView((v) => ({ ...v, phase: "result", result }));
     },
     [clearTimers],
+  );
+
+  const startFight = useCallback(
+    (cast: Cast) => {
+      clearTimers();
+      const rarity = cast.fish.rarity;
+      let state: FightState = createFight(rarity);
+      let last = performance.now();
+      live.current.phase = "fight";
+      setFightUi({ tension: state.tension, progress: state.progress, surging: false });
+      setView((v) => ({ ...v, phase: "fight" }));
+      const tick = (now: number) => {
+        const dt = Math.min((now - last) / 1000, 0.05);
+        last = now;
+        state = stepFight(state, rarity, holding.current, dt, Math.random, cast.slackMultiplier);
+        setFightUi({ tension: state.tension, progress: state.progress, surging: state.surging });
+        if (state.end) {
+          finish(cast, fightResult(cast, state.end));
+          return;
+        }
+        raf.current = window.requestAnimationFrame(tick);
+      };
+      raf.current = window.requestAnimationFrame(tick);
+    },
+    [clearTimers, finish],
   );
 
   const startNewCast = useCallback(() => {
@@ -170,9 +211,15 @@ export function FishingGame() {
     } else if (phase === "waiting" && cast) {
       finish(cast, resolveCast(cast, -1));
     } else if (phase === "bite" && cast) {
-      finish(cast, resolveCast(cast, Math.max(0, performance.now() - biteAt)));
+      const hook = resolveHook(cast, Math.max(0, performance.now() - biteAt));
+      if (hook === "hooked") {
+        startFight(cast);
+        holding.current = true; // the tap that set the hook starts the reel
+      } else {
+        finish(cast, resolveCast(cast, null));
+      }
     }
-  }, [finish, startNewCast]);
+  }, [finish, startFight, startNewCast]);
 
   // Taps are handled on pointerdown for a snappier feel. A click with detail 0
   // can only come from the keyboard or assistive tech, so handle just those.
@@ -180,7 +227,27 @@ export function FishingGame() {
     if (e.pointerType === "mouse" && e.button !== 0) {
       return;
     }
+    if (live.current.phase === "fight") {
+      holding.current = true;
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+      return;
+    }
     act();
+  };
+  const releaseReel = () => {
+    holding.current = false;
+  };
+  const handleKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
+    if ((e.key === " " || e.key === "Enter") && live.current.phase === "fight") {
+      e.preventDefault();
+      holding.current = true;
+    }
+  };
+  const handleKeyUp = (e: KeyboardEvent<HTMLButtonElement>) => {
+    if ((e.key === " " || e.key === "Enter") && live.current.phase === "fight") {
+      e.preventDefault();
+      holding.current = false;
+    }
   };
   const handleClick = (e: MouseEvent<HTMLButtonElement>) => {
     if (e.detail === 0) {
@@ -194,7 +261,7 @@ export function FishingGame() {
   const location = getLocation(loadout.locationId);
   const rod = getRod(loadout.rodId);
   const bait = getBait(loadout.baitId);
-  const busy = view.phase === "waiting" || view.phase === "bite";
+  const busy = view.phase !== "idle" && view.phase !== "result";
 
   return (
     <div data-phase={view.phase} className="flex flex-col gap-3">
@@ -235,7 +302,33 @@ export function FishingGame() {
         {STATUS_TEXT[view.phase]}
       </p>
 
-      <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+      {view.phase === "fight" && (
+        <div className="flex flex-col gap-1.5" data-testid="fight-meters">
+          <div
+            className="h-2.5 w-full overflow-hidden rounded-full bg-white/10"
+            role="progressbar"
+            aria-label="Catch progress"
+            aria-valuenow={Math.round(fightUi.progress * 100)}
+          >
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-cyan-300"
+              style={{ width: `${fightUi.progress * 100}%` }}
+            />
+          </div>
+          <div
+            className={`h-2.5 w-full overflow-hidden rounded-full bg-white/10 ${fightUi.surging ? "animate-pulse" : ""}`}
+            role="progressbar"
+            aria-label="Line tension"
+            aria-valuenow={Math.round(fightUi.tension * 100)}
+          >
+            <div
+              className={`h-full rounded-full ${fightUi.tension > 0.75 ? "bg-rose-500" : "bg-amber-300"}`}
+              style={{ width: `${fightUi.tension * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
+      <div className={`h-2 w-full overflow-hidden rounded-full bg-white/10 ${view.phase === "fight" ? "hidden" : ""}`}>
         {view.phase === "bite" && view.cast && (
           <div
             className="timer-bar h-full rounded-full bg-gradient-to-r from-rose-400 to-amber-300"
@@ -248,6 +341,10 @@ export function FishingGame() {
         type="button"
         data-testid="action"
         onPointerDown={handlePointerDown}
+        onPointerUp={releaseReel}
+        onPointerCancel={releaseReel}
+        onKeyDown={handleKeyDown}
+        onKeyUp={handleKeyUp}
         onClick={handleClick}
         className={`h-16 w-full touch-manipulation select-none rounded-2xl text-xl font-extrabold tracking-wide transition-transform active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 ${BUTTON_STYLE[view.phase]}`}
       >

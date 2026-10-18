@@ -134,6 +134,8 @@ export interface Cast {
   biteDelayMs: number;
   windowMs: number;
   escapeChance: number;
+  /** Scales how much line the fish wins back during the fight (gear lowers it). */
+  slackMultiplier: number;
 }
 
 /** Decides everything about a cast up front: which fish, when it bites, how long you have. */
@@ -146,10 +148,11 @@ export function startCast(loadout: Loadout, rng: Rng = Math.random): Cast {
     biteDelayMs: rollBiteDelayMs(stats.waitMultiplier, rng),
     windowMs: tapWindowMs(rarity, stats.windowBonusMs),
     escapeChance: escapeChance(rarity, stats.escapeMultiplier),
+    slackMultiplier: stats.escapeMultiplier,
   };
 }
 
-export type CastOutcome = "caught" | "too-early" | "too-late" | "escaped";
+export type CastOutcome = "caught" | "too-early" | "too-late" | "escaped" | "snapped";
 
 export interface CastResult {
   outcome: CastOutcome;
@@ -178,4 +181,22 @@ export function resolveCast(
     return { outcome: "escaped", points: 0 };
   }
   return { outcome: "caught", points: RARITY_INFO[cast.fish.rarity].points };
+}
+
+export type HookResult = "hooked" | "too-early" | "too-late";
+
+/** Timing check for setting the hook. A good tap starts the reeling fight (see fight.ts). */
+export function resolveHook(cast: Cast, tapOffsetMs: number | null): HookResult {
+  if (tapOffsetMs === null || !Number.isFinite(tapOffsetMs) || tapOffsetMs > cast.windowMs) {
+    return "too-late";
+  }
+  return tapOffsetMs < 0 ? "too-early" : "hooked";
+}
+
+/** Turns the way a fight ended into a cast result. */
+export function fightResult(cast: Cast, end: "caught" | "snapped" | "escaped"): CastResult {
+  return {
+    outcome: end,
+    points: end === "caught" ? RARITY_INFO[cast.fish.rarity].points : 0,
+  };
 }
