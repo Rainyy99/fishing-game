@@ -48,6 +48,8 @@ function Option({
   description,
   effects,
   testId,
+  icon,
+  disabled,
 }: {
   selected: boolean;
   onClick: () => void;
@@ -56,6 +58,8 @@ function Option({
   description: string;
   effects: string[];
   testId: string;
+  icon?: string;
+  disabled?: boolean;
 }) {
   return (
     <button
@@ -63,16 +67,27 @@ function Option({
       data-testid={testId}
       aria-pressed={selected}
       onClick={onClick}
-      className={`rounded-2xl border p-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 ${
+      disabled={disabled}
+      className={`flex items-center gap-3 rounded-2xl border p-3 text-left transition-colors disabled:opacity-45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 ${
         selected
           ? "border-sky-300 bg-sky-400/10"
           : "border-white/10 bg-white/5 hover:bg-white/10"
       }`}
     >
+      {icon && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={icon} alt="" draggable={false} className="h-12 w-12 shrink-0 object-contain" />
+      )}
+      <div className="min-w-0 flex-1">
       <div className="flex items-center justify-between gap-2">
         <span className="font-bold">{title}</span>
         <span className="flex items-center gap-2">
-          {tier && (
+          {disabled && (
+            <span className="rounded-full bg-amber-300/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-300">
+              Coming soon
+            </span>
+          )}
+          {tier && !disabled && (
             <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-300">
               Tier {tier}
             </span>
@@ -91,6 +106,7 @@ function Option({
           {effects.join(" · ")}
         </p>
       )}
+      </div>
     </button>
   );
 }
@@ -200,13 +216,14 @@ export function GearPanel({ loadout, onChange, onClose }: GearPanelProps) {
               key={item.id}
               testId={`loc-${item.id}`}
               selected={loadout.locationId === item.id}
+              disabled={item.comingSoon}
               onClick={() => onChange({ ...loadout, locationId: item.id })}
               title={item.name}
               tier={item.tier}
               description={item.description}
               effects={compact([
                 boostLabel(item.rarityBoost),
-                `${item.fish.length} fish`,
+                item.comingSoon ? null : `${item.fish.length} fish`,
               ])}
             />
           ))}
@@ -217,6 +234,7 @@ export function GearPanel({ loadout, onChange, onClose }: GearPanelProps) {
             <Option
               key={item.id}
               testId={`rod-${item.id}`}
+              icon={`/art/items/${item.id}.png`}
               selected={loadout.rodId === item.id}
               onClick={() => onChange({ ...loadout, rodId: item.id })}
               title={item.name}
@@ -232,6 +250,7 @@ export function GearPanel({ loadout, onChange, onClose }: GearPanelProps) {
             <Option
               key={item.id}
               testId={`bait-${item.id}`}
+              icon={`/art/items/${item.id}.png`}
               selected={loadout.baitId === item.id}
               onClick={() => onChange({ ...loadout, baitId: item.id })}
               title={item.name}
@@ -252,6 +271,7 @@ export function GearPanel({ loadout, onChange, onClose }: GearPanelProps) {
             <Option
               key={item.id}
               testId={`acc-${item.id}`}
+              icon={`/art/items/${item.id}.png`}
               selected={loadout.accessoryIds.includes(item.id)}
               onClick={() => toggleAccessory(item.id, item.slot)}
               title={item.name}

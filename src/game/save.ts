@@ -3,6 +3,7 @@
 import {
   DEFAULT_LOADOUT,
   LOCATIONS,
+  getLocation,
   RARITY_INFO,
   type Fish,
 } from "./data";
@@ -89,6 +90,9 @@ function cleanLoadout(value: unknown): Loadout {
       : [],
   };
   try {
+    if (getLocation(candidate.locationId).comingSoon) {
+      candidate.locationId = DEFAULT_LOADOUT.locationId;
+    }
     resolveStats(candidate);
     return candidate;
   } catch {

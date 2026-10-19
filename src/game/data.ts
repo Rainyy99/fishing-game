@@ -44,6 +44,8 @@ export interface Fish {
   id: string;
   name: string;
   rarity: Rarity;
+  /** File name (no extension) of its artwork in /art/misty-lake/fish. Fish without art use the generated drawing. */
+  art?: string;
 }
 
 export interface Location {
@@ -54,6 +56,8 @@ export interface Location {
   /** Multiplies the odds of non-common fish. */
   rarityBoost: number;
   fish: readonly Fish[];
+  /** Shown in menus but not playable yet. */
+  comingSoon?: boolean;
 }
 
 export interface Rod {
@@ -92,6 +96,14 @@ export interface Accessory {
   rarityBoost: number;
 }
 
+/** Builds Misty Lake fish entries: [id, name, art file name (defaults to the id)]. */
+function lakeFish(
+  rarity: Rarity,
+  list: ReadonlyArray<readonly [string, string, string?]>,
+): Fish[] {
+  return list.map(([id, name, art]) => ({ id, name, rarity, art: art ?? id }));
+}
+
 export const LOCATIONS: readonly Location[] = [
   {
     id: "river",
@@ -99,6 +111,7 @@ export const LOCATIONS: readonly Location[] = [
     description: "Calm, shallow water. A good place to learn the ropes.",
     tier: 1,
     rarityBoost: 1,
+    comingSoon: true,
     fish: [
       { id: "minnow", name: "Minnow", rarity: "common" },
       { id: "river-perch", name: "River Perch", rarity: "common" },
@@ -112,17 +125,49 @@ export const LOCATIONS: readonly Location[] = [
   {
     id: "lake",
     name: "Misty Lake",
-    description: "Deeper water with bigger fish hiding in the reeds.",
+    description: "Moonlit water, old ruins and fog. 29 fish hide here.",
     tier: 2,
     rarityBoost: 1.1,
     fish: [
-      { id: "bluegill", name: "Bluegill", rarity: "common" },
-      { id: "reed-sunfish", name: "Reed Sunfish", rarity: "common" },
-      { id: "lake-bass", name: "Lake Bass", rarity: "uncommon" },
-      { id: "northern-pike", name: "Northern Pike", rarity: "uncommon" },
-      { id: "amber-walleye", name: "Amber Walleye", rarity: "rare" },
-      { id: "crystal-trout", name: "Crystal Trout", rarity: "epic" },
-      { id: "lake-dragon-eel", name: "Lake Dragon Eel", rarity: "legendary" },
+      ...lakeFish("common", [
+        ["bluegill", "Bluegill"],
+        ["reed-sunfish", "Reed Sunfish"],
+        ["yellow-perch", "Yellow Perch"],
+        ["black-crappie", "Black Crappie"],
+        ["rock-bass", "Rock Bass"],
+        ["brown-bullhead", "Brown Bullhead"],
+        ["white-sucker", "White Sucker"],
+        ["golden-shiner", "Golden Shiner"],
+      ]),
+      ...lakeFish("uncommon", [
+        ["lake-bass", "Lake Bass", "largemouth-bass"],
+        ["smallmouth-bass", "Smallmouth Bass"],
+        ["white-bass", "White Bass"],
+        ["chain-pickerel", "Chain Pickerel"],
+        ["rainbow-trout", "Rainbow Trout"],
+        ["brown-trout", "Brown Trout"],
+        ["common-carp", "Common Carp"],
+      ]),
+      ...lakeFish("rare", [
+        ["northern-pike", "Northern Pike"],
+        ["amber-walleye", "Amber Walleye"],
+        ["channel-catfish", "Channel Catfish"],
+        ["brook-trout", "Brook Trout"],
+        ["burbot", "Burbot"],
+        ["lake-whitefish", "Lake Whitefish"],
+      ]),
+      ...lakeFish("epic", [
+        ["muskellunge", "Muskellunge"],
+        ["crystal-trout", "Crystal Trout", "lake-trout"],
+        ["flathead-catfish", "Flathead Catfish"],
+        ["bowfin", "Bowfin"],
+        ["longnose-gar", "Longnose Gar"],
+      ]),
+      ...lakeFish("legendary", [
+        ["lake-sturgeon", "Lake Sturgeon"],
+        ["lake-dragon-eel", "Lake Dragon Eel"],
+        ["wels-catfish", "Wels Catfish"],
+      ]),
     ],
   },
   {
@@ -131,6 +176,7 @@ export const LOCATIONS: readonly Location[] = [
     description: "Dark open water where the rarest catches live.",
     tier: 3,
     rarityBoost: 1.25,
+    comingSoon: true,
     fish: [
       { id: "sardine", name: "Sardine", rarity: "common" },
       { id: "mackerel", name: "Mackerel", rarity: "common" },
@@ -228,7 +274,7 @@ export const ACCESSORIES: readonly Accessory[] = [
 ];
 
 export const DEFAULT_LOADOUT = {
-  locationId: "river",
+  locationId: "lake",
   rodId: "bamboo-rod",
   baitId: "garden-worm",
   /** One optional accessory per slot. */

@@ -13,7 +13,7 @@ import {
   type BookFish,
 } from "@/game/save";
 import { updateSave, useSave } from "@/game/store";
-import { FishSvg } from "./FishSvg";
+import { FishArt } from "./FishArt";
 
 function FishCard({
   fish,
@@ -39,7 +39,7 @@ function FishCard({
         className="flex h-16 items-center justify-center"
         style={found ? undefined : { filter: "brightness(0)", opacity: 0.35 }}
       >
-        <FishSvg fish={fish} className="h-auto w-24" />
+        <FishArt fish={fish} className="h-auto w-24" />
       </div>
       <p className="mt-1 truncate text-sm font-bold">{found ? fish.name : "???"}</p>
       <p

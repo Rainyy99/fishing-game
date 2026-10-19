@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { KeyboardEvent, MouseEvent, PointerEvent } from "react";
+import type { MouseEvent, PointerEvent } from "react";
 import { RARITY_INFO, getBait, getLocation, getRod } from "@/game/data";
 import {
   fightResult,
@@ -15,7 +15,7 @@ import {
 import { createFight, stepFight, type FightState } from "@/game/fight";
 import { applyCastResult, fishValue, withLoadout } from "@/game/save";
 import { updateSave, useSave } from "@/game/store";
-import { FishSvg } from "./FishSvg";
+import { FishArt } from "./FishArt";
 import { GearPanel } from "./GearPanel";
 import { Scene, type ScenePhase } from "./Scene";
 
@@ -31,7 +31,7 @@ const STATUS_TEXT: Record<ScenePhase, string> = {
   idle: "Tap Cast to throw your line.",
   waiting: "Waiting for a bite... do not tap yet!",
   bite: "Fish on! Tap now to set the hook!",
-  fight: "Hold to reel. Let go when the line sings!",
+  fight: "Tap in a steady rhythm. Stop when the fish surges!",
   result: "Ready for another cast?",
 };
 
@@ -39,7 +39,7 @@ const BUTTON_LABEL: Record<ScenePhase, string> = {
   idle: "Cast",
   waiting: "Waiting...",
   bite: "SET THE HOOK!",
-  fight: "HOLD TO REEL",
+  fight: "TAP TO REEL",
   result: "Cast again",
 };
 
@@ -93,9 +93,9 @@ function ResultPanel({ cast, result }: { cast: Cast; result: CastResult }) {
       style={{ borderColor: caught ? info.color : "rgba(255,255,255,0.12)" }}
     >
       {result.outcome !== "too-early" && (
-        <FishSvg
+        <FishArt
           fish={cast.fish}
-          className={`mx-auto h-auto w-24 ${caught ? "" : "opacity-40 grayscale"}`}
+          className={`mx-auto h-auto w-40 ${caught ? "" : "opacity-40 grayscale"}`}
         />
       )}
       <p
@@ -118,10 +118,10 @@ export function FishingGame() {
   const { loadout } = useSave();
   const [view, setView] = useState<View>(INITIAL_VIEW);
   const [gearOpen, setGearOpen] = useState(false);
-  const [fightUi, setFightUi] = useState({ tension: 0, progress: 0, surging: false });
+  const [fightUi, setFightUi] = useState({ tension: 0, progress: 0, surging: false, warning: false });
   const timers = useRef<number[]>([]);
   const raf = useRef(0);
-  const holding = useRef(false);
+  const taps = useRef(0);
   const live = useRef<{ phase: ScenePhase; cast: Cast | null; biteAt: number }>({
     phase: "idle",
     cast: null,
@@ -132,7 +132,7 @@ export function FishingGame() {
     timers.current.forEach((id) => window.clearTimeout(id));
     timers.current = [];
     window.cancelAnimationFrame(raf.current);
-    holding.current = false;
+    taps.current = 0;
   }, []);
 
   useEffect(() => clearTimers, [clearTimers]);
@@ -158,13 +158,20 @@ export function FishingGame() {
       let state: FightState = createFight(rarity);
       let last = performance.now();
       live.current.phase = "fight";
-      setFightUi({ tension: state.tension, progress: state.progress, surging: false });
+      setFightUi({ tension: state.tension, progress: state.progress, surging: false, warning: false });
       setView((v) => ({ ...v, phase: "fight" }));
       const tick = (now: number) => {
         const dt = Math.min((now - last) / 1000, 0.05);
         last = now;
-        state = stepFight(state, rarity, holding.current, dt, Math.random, cast.slackMultiplier);
-        setFightUi({ tension: state.tension, progress: state.progress, surging: state.surging });
+        const pending = taps.current;
+        taps.current = 0;
+        state = stepFight(state, rarity, pending, dt, Math.random, cast.slackMultiplier);
+        setFightUi({
+          tension: state.tension,
+          progress: state.progress,
+          surging: state.surging,
+          warning: state.warning,
+        });
         if (state.end) {
           finish(cast, fightResult(cast, state.end));
           return;
@@ -210,11 +217,16 @@ export function FishingGame() {
       startNewCast();
     } else if (phase === "waiting" && cast) {
       finish(cast, resolveCast(cast, -1));
+    } else if (phase === "fight") {
+      taps.current += 1;
+      if (typeof navigator.vibrate === "function") {
+        navigator.vibrate(8);
+      }
     } else if (phase === "bite" && cast) {
       const hook = resolveHook(cast, Math.max(0, performance.now() - biteAt));
       if (hook === "hooked") {
         startFight(cast);
-        holding.current = true; // the tap that set the hook starts the reel
+        taps.current = 1; // the tap that set the hook is the first reel tap
       } else {
         finish(cast, resolveCast(cast, null));
       }
@@ -227,27 +239,7 @@ export function FishingGame() {
     if (e.pointerType === "mouse" && e.button !== 0) {
       return;
     }
-    if (live.current.phase === "fight") {
-      holding.current = true;
-      e.currentTarget.setPointerCapture?.(e.pointerId);
-      return;
-    }
     act();
-  };
-  const releaseReel = () => {
-    holding.current = false;
-  };
-  const handleKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
-    if ((e.key === " " || e.key === "Enter") && live.current.phase === "fight") {
-      e.preventDefault();
-      holding.current = true;
-    }
-  };
-  const handleKeyUp = (e: KeyboardEvent<HTMLButtonElement>) => {
-    if ((e.key === " " || e.key === "Enter") && live.current.phase === "fight") {
-      e.preventDefault();
-      holding.current = false;
-    }
   };
   const handleClick = (e: MouseEvent<HTMLButtonElement>) => {
     if (e.detail === 0) {
@@ -275,34 +267,13 @@ export function FishingGame() {
           }
         />
         {view.phase === "result" && view.cast && view.result && (
-          <div className="absolute inset-x-3 bottom-3">
+          <div className="absolute inset-x-3 top-[24%]">
             <ResultPanel cast={view.cast} result={view.result} />
           </div>
         )}
-      </div>
-      <button
-        type="button"
-        data-testid="gear-open"
-        disabled={busy}
-        onClick={() => setGearOpen(true)}
-        className="flex items-center justify-between gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 disabled:opacity-50"
-      >
-        <span className="truncate">
-          {location.name} · {rod.name} · {bait.name}
-          {loadout.accessoryIds.length > 0
-            ? ` · +${loadout.accessoryIds.length}`
-            : ""}
-        </span>
-        <span className={`shrink-0 text-sky-300 ${busy ? "invisible" : ""}`}>
-          Change
-        </span>
-      </button>
-
-      <p aria-live="polite" className="min-h-6 text-center text-sm text-slate-300">
-        {STATUS_TEXT[view.phase]}
-      </p>
-
-      {view.phase === "fight" && (
+        {(view.phase === "fight" || view.phase === "bite") && (
+          <div className="absolute inset-x-3 top-3 rounded-2xl bg-slate-950/70 p-2.5">
+        {view.phase === "fight" && (
         <div className="flex flex-col gap-1.5" data-testid="fight-meters">
           <div
             className="h-2.5 w-full overflow-hidden rounded-full bg-white/10"
@@ -328,7 +299,7 @@ export function FishingGame() {
           </div>
         </div>
       )}
-      <div className={`h-2 w-full overflow-hidden rounded-full bg-white/10 ${view.phase === "fight" ? "hidden" : ""}`}>
+      <div className={`mt-0 h-2.5 w-full overflow-hidden rounded-full bg-white/10 ${view.phase === "fight" ? "hidden" : ""}`}>
         {view.phase === "bite" && view.cast && (
           <div
             className="timer-bar h-full rounded-full bg-gradient-to-r from-rose-400 to-amber-300"
@@ -337,19 +308,46 @@ export function FishingGame() {
         )}
       </div>
 
+          </div>
+        )}
+        <div className="absolute bottom-3 right-3 w-[62%]">
       <button
         type="button"
         data-testid="action"
         onPointerDown={handlePointerDown}
-        onPointerUp={releaseReel}
-        onPointerCancel={releaseReel}
-        onKeyDown={handleKeyDown}
-        onKeyUp={handleKeyUp}
         onClick={handleClick}
-        className={`h-16 w-full touch-manipulation select-none rounded-2xl text-xl font-extrabold tracking-wide transition-transform active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 ${BUTTON_STYLE[view.phase]}`}
+        className={`h-16 w-full touch-manipulation select-none rounded-2xl text-xl font-extrabold tracking-wide transition-transform active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 ${view.phase === "fight" && (fightUi.surging || fightUi.warning) ? "bg-gradient-to-r from-rose-500 to-red-600 text-white" : BUTTON_STYLE[view.phase]}`}
       >
-        {BUTTON_LABEL[view.phase]}
+        {view.phase === "fight" && fightUi.surging
+          ? "HOLD OFF!"
+          : view.phase === "fight" && fightUi.warning
+            ? "EASY..."
+            : BUTTON_LABEL[view.phase]}
       </button>
+
+        </div>
+      </div>
+      <button
+        type="button"
+        data-testid="gear-open"
+        disabled={busy}
+        onClick={() => setGearOpen(true)}
+        className="flex items-center justify-between gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 disabled:opacity-50"
+      >
+        <span className="truncate">
+          {location.name} · {rod.name} · {bait.name}
+          {loadout.accessoryIds.length > 0
+            ? ` · +${loadout.accessoryIds.length}`
+            : ""}
+        </span>
+        <span className={`shrink-0 text-sky-300 ${busy ? "invisible" : ""}`}>
+          Change
+        </span>
+      </button>
+
+      <p aria-live="polite" className="min-h-6 text-center text-sm text-slate-300">
+        {STATUS_TEXT[view.phase]}
+      </p>
 
       {gearOpen && (
         <GearPanel
