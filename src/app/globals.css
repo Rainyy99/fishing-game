@@ -1,18 +1,102 @@
 @import "tailwindcss";
+@import "@fontsource/lilita-one/400.css";
+@import "@fontsource-variable/nunito-sans/index.css";
+
+/* Palette taken from the painted lake: night water, moon, lantern and boat wood. */
+@theme {
+  --color-ink: #07121f;
+  --color-lake: #0f2740;
+  --color-lake-2: #183a5c;
+  --color-lake-3: #234b73;
+  --color-moon: #f6e7b4;
+  --color-lantern: #f4a636;
+  --color-lantern-d: #b9650f;
+  --color-brass: #c9a25a;
+  --color-mist: #9dbfd3;
+  --color-line: #081726;
+  --color-plank: #7a4f28;
+  --color-plank-d: #4b2f16;
+  --color-signal: #ff5d73;
+  --font-display: "Lilita One", "Arial Rounded MT Bold", system-ui, sans-serif;
+  --font-sans: "Nunito Sans Variable", ui-sans-serif, system-ui, sans-serif;
+}
 
 :root {
-  --bg: #050816;
-  --fg: #e6edf7;
   color-scheme: dark;
 }
 
 body {
-  background: var(--bg);
-  color: var(--fg);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
+  background:
+    radial-gradient(120% 60% at 80% -10%, rgba(246, 231, 180, 0.08), transparent 60%),
+    var(--color-ink);
+  color: #e8f1f8;
+  font-family: var(--font-sans);
   -webkit-tap-highlight-color: transparent;
 }
+
+.font-display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+/* Headline lettering with the same dark outline the artwork uses. */
+.lettered {
+  font-family: var(--font-display);
+  color: var(--color-moon);
+  -webkit-text-stroke: 4px var(--color-line);
+  paint-order: stroke fill;
+  text-shadow: 0 3px 0 var(--color-line);
+}
+
+/* Sticker buttons: thick outline, flat colour, a hard shadow that squashes on press. */
+.btn {
+  font-family: var(--font-display);
+  letter-spacing: 0.02em;
+  border: 3px solid var(--color-line);
+  border-radius: 16px;
+  box-shadow: 0 4px 0 var(--color-line), inset 0 2px 0 rgba(255, 255, 255, 0.35);
+  transition: transform 80ms ease-out, box-shadow 80ms ease-out;
+  touch-action: manipulation;
+  user-select: none;
+}
+.btn:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--color-line), inset 0 2px 0 rgba(255, 255, 255, 0.25);
+}
+.btn:disabled { opacity: 0.55; box-shadow: 0 2px 0 var(--color-line); }
+.btn-primary { background: linear-gradient(#ffc866, var(--color-lantern)); color: var(--color-line); }
+.btn-quiet { background: linear-gradient(var(--color-lake-3), var(--color-lake-2)); color: var(--color-moon); }
+.btn-alert { background: linear-gradient(#ff8d9c, var(--color-signal)); color: var(--color-line); }
+
+/* Panels: deep lake surface, dark outline, a brass line just inside it. */
+.panel {
+  background: var(--color-lake);
+  border: 3px solid var(--color-line);
+  border-radius: 20px;
+  box-shadow: inset 0 0 0 1px rgba(201, 162, 90, 0.3), 0 5px 0 rgba(0, 0, 0, 0.28);
+}
+.panel-raised {
+  background: var(--color-lake-2);
+  border: 3px solid var(--color-line);
+  border-radius: 16px;
+  box-shadow: inset 0 0 0 1px rgba(246, 231, 180, 0.12);
+}
+
+/* Boat wood for the tab bar. */
+.plank {
+  background:
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.1) 0 2px, transparent 2px 11px),
+    linear-gradient(#8f5d30, var(--color-plank) 40%, var(--color-plank-d));
+  border-top: 4px solid var(--color-line);
+  box-shadow: inset 0 3px 0 rgba(255, 220, 160, 0.25);
+}
+
+@keyframes sheet-up {
+  from { transform: translateY(24px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.sheet-in { animation: sheet-up 0.22s ease-out both; }
 
 /* Scene animations */
 @keyframes twinkle {
@@ -77,7 +161,7 @@ body {
 .result-in { animation: rise 0.35s ease-out both; }
 
 @media (prefers-reduced-motion: reduce) {
-  .star, .wave, .wave-slow, .bobber-idle, .ripple, .shimmer, .pop, .result-in {
+  .star, .wave, .wave-slow, .bobber-idle, .ripple, .shimmer, .pop, .result-in, .sheet-in {
     animation: none;
   }
   .bobber-bite {

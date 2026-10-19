@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { MouseEvent, PointerEvent } from "react";
-import { RARITY_INFO, getBait, getLocation, getRod } from "@/game/data";
+import { RARITY_INFO, getBait, getRod } from "@/game/data";
 import {
   fightResult,
   resolveCast,
@@ -16,6 +16,8 @@ import { createFight, stepFight, type FightState } from "@/game/fight";
 import { applyCastResult, fishValue, withLoadout } from "@/game/save";
 import { updateSave, useSave } from "@/game/store";
 import { FishArt } from "./FishArt";
+import { Button } from "./ui/Button";
+import { RarityTag } from "./ui/RarityTag";
 import { GearPanel } from "./GearPanel";
 import { Scene, type ScenePhase } from "./Scene";
 
@@ -29,31 +31,19 @@ const INITIAL_VIEW: View = { phase: "idle", cast: null, result: null };
 
 const STATUS_TEXT: Record<ScenePhase, string> = {
   idle: "Tap Cast to throw your line.",
-  waiting: "Waiting for a bite... do not tap yet!",
-  bite: "Fish on! Tap now to set the hook!",
-  fight: "Tap in a steady rhythm. Stop when the fish surges!",
+  waiting: "Wait for the bobber to dip...",
+  bite: "Fish on! Set the hook!",
+  fight: "Tap in a steady beat. Stop on red.",
   result: "Ready for another cast?",
 };
 
 const BUTTON_LABEL: Record<ScenePhase, string> = {
   idle: "Cast",
   waiting: "Waiting...",
-  bite: "SET THE HOOK!",
+  bite: "HOOK IT!",
   fight: "TAP TO REEL",
   result: "Cast again",
 };
-
-const BUTTON_STYLE: Record<ScenePhase, string> = {
-  idle: "bg-gradient-to-r from-sky-400 to-cyan-300 text-slate-950",
-  result: "bg-gradient-to-r from-sky-400 to-cyan-300 text-slate-950",
-  waiting: "border border-white/15 bg-white/10 text-slate-300",
-  bite: "animate-pulse bg-gradient-to-r from-rose-500 to-amber-400 text-white",
-  fight: "bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950",
-};
-
-function describe(cast: Cast): string {
-  return `${cast.fish.name} (${RARITY_INFO[cast.fish.rarity].label})`;
-}
 
 function ResultPanel({ cast, result }: { cast: Cast; result: CastResult }) {
   const info = RARITY_INFO[cast.fish.rarity];
@@ -63,53 +53,52 @@ function ResultPanel({ cast, result }: { cast: Cast; result: CastResult }) {
   let body: string;
   switch (result.outcome) {
     case "caught":
-      title = cast.fish.rarity === "common" || cast.fish.rarity === "uncommon"
-        ? "Nice catch!"
-        : `${info.label} catch!`;
-      body = describe(cast);
+      title = cast.fish.name;
+      body = caught && cast.fish.rarity !== "common" && cast.fish.rarity !== "uncommon"
+        ? `A ${info.label.toLowerCase()} catch. Nicely reeled.`
+        : "Added to your bag.";
       break;
     case "escaped":
-      title = "It got away!";
-      body = `The ${describe(cast)} took your bait and slipped off the hook.`;
+      title = "It got away";
+      body = `The ${cast.fish.name} pulled free before you landed it. Tap faster when the bar is low.`;
       break;
     case "snapped":
-      title = "Line snapped!";
-      body = `You pulled too hard. The ${describe(cast)} snapped the line.`;
+      title = "Line snapped";
+      body = `You tapped too hard and the ${cast.fish.name} broke the line. Ease off when the red bar fills.`;
       break;
     case "too-late":
-      title = "Bait eaten!";
-      body = `The ${describe(cast)} ate your bait and swam off.`;
+      title = "Bait eaten";
+      body = `The ${cast.fish.name} took your bait and swam off. Tap as soon as you see the red !`;
       break;
     case "too-early":
-      title = "Too early!";
-      body = "You pulled the line before the bite. Wait for the splash!";
+      title = "Too early";
+      body = "You pulled before the bite. Wait for the bobber to dip.";
       break;
   }
 
   return (
     <div
       role="status"
-      className="result-in rounded-2xl border bg-slate-950/85 p-2.5 text-center backdrop-blur-sm"
-      style={{ borderColor: caught ? info.color : "rgba(255,255,255,0.12)" }}
+      className="result-in panel flex items-center gap-3 p-2.5"
+      style={caught ? { boxShadow: `inset 0 0 0 2px ${info.color}, 0 5px 0 rgba(0,0,0,0.28)` } : undefined}
     >
       {result.outcome !== "too-early" && (
-        <FishArt
-          fish={cast.fish}
-          className={`mx-auto h-auto w-40 ${caught ? "" : "opacity-40 grayscale"}`}
-        />
+        <div className="flex h-16 w-24 shrink-0 items-center justify-center rounded-xl bg-ink/70">
+          <FishArt
+            fish={cast.fish}
+            className={`h-auto max-h-14 w-20 object-contain ${caught ? "" : "opacity-40 grayscale"}`}
+          />
+        </div>
       )}
-      <p
-        className="mt-2 text-lg font-extrabold"
-        style={caught ? { color: info.color } : undefined}
-      >
-        {title}
-      </p>
-      <p className="text-sm text-slate-300">{body}</p>
-      {caught && (
-        <p className="mt-1 text-sm font-bold text-amber-300">
-          Added to your bag · worth {fishValue(cast.fish)} pts
+      <div className="min-w-0 flex-1">
+        {caught && <RarityTag rarity={cast.fish.rarity} />}
+        <p className="lettered truncate text-2xl leading-tight" style={caught ? { color: info.color } : undefined}>
+          {title}
         </p>
-      )}
+        <p className="text-xs leading-snug text-mist">
+          {caught ? `${body} +${fishValue(cast.fish)} pts when sold.` : body}
+        </p>
+      </div>
     </div>
   );
 }
@@ -250,112 +239,139 @@ export function FishingGame() {
   const changeLoadout = (next: Loadout) =>
     updateSave((save) => withLoadout(save, next));
 
-  const location = getLocation(loadout.locationId);
   const rod = getRod(loadout.rodId);
   const bait = getBait(loadout.baitId);
   const busy = view.phase !== "idle" && view.phase !== "result";
 
+  const inFight = view.phase === "fight";
+  const danger = inFight && (fightUi.surging || fightUi.warning);
+  const actionLabel = inFight && fightUi.surging
+    ? "Hold off!"
+    : inFight && fightUi.warning
+      ? "Easy..."
+      : BUTTON_LABEL[view.phase];
+  const actionVariant = danger || view.phase === "bite" ? "alert" : view.phase === "waiting" ? "quiet" : "primary";
+
   return (
-    <div data-phase={view.phase} className="flex flex-col gap-3">
-      <div className="relative overflow-hidden rounded-3xl border border-white/10 shadow-[0_0_40px_rgba(56,189,248,0.12)]">
-        <Scene
-          phase={view.phase}
-          eaten={
-            view.phase === "result" &&
-            (view.result?.outcome === "too-late" ||
-              view.result?.outcome === "escaped")
-          }
-        />
+    <div data-phase={view.phase} className="flex flex-1 flex-col">
+      <Scene
+        phase={view.phase}
+        eaten={
+          view.phase === "result" &&
+          (view.result?.outcome === "too-late" ||
+            view.result?.outcome === "escaped" ||
+            view.result?.outcome === "snapped")
+        }
+      />
+
+      <div className="min-h-12">
+        {(inFight || view.phase === "bite") && (
+          <div className="flex flex-col gap-1.5 rounded-2xl border-3 border-line bg-ink/85 p-2 backdrop-blur-sm">
+            {inFight ? (
+              <>
+                <Meter label="Catch" value={fightUi.progress} fill="bg-gradient-to-r from-[#3fd6a0] to-[#7fe8ff]" testId="meter-catch" />
+                <Meter
+                  label="Line"
+                  value={fightUi.tension}
+                  fill={fightUi.tension > 0.75 ? "bg-signal" : "bg-gradient-to-r from-[#ffd37a] to-lantern"}
+                  alert={fightUi.surging}
+                  mark={0.75}
+                  testId="meter-line"
+                />
+              </>
+            ) : (
+              view.cast && (
+                <div className="flex items-center gap-2">
+                  <span className="font-display w-12 text-sm text-moon">Hook!</span>
+                  <div className="h-4 flex-1 overflow-hidden rounded-full border-2 border-line bg-lake">
+                    <div
+                      className="timer-bar h-full rounded-full bg-gradient-to-r from-[#ff8d9c] to-signal"
+                      style={{ animationDuration: `${view.cast.windowMs}ms` }}
+                    />
+                  </div>
+                </div>
+              )
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="mt-auto flex flex-col gap-3">
         {view.phase === "result" && view.cast && view.result && (
-          <div className="absolute inset-x-3 top-[24%]">
-            <ResultPanel cast={view.cast} result={view.result} />
-          </div>
+          <ResultPanel cast={view.cast} result={view.result} />
         )}
-        {(view.phase === "fight" || view.phase === "bite") && (
-          <div className="absolute inset-x-3 top-3 rounded-2xl bg-slate-950/70 p-2.5">
-        {view.phase === "fight" && (
-        <div className="flex flex-col gap-1.5" data-testid="fight-meters">
-          <div
-            className="h-2.5 w-full overflow-hidden rounded-full bg-white/10"
-            role="progressbar"
-            aria-label="Catch progress"
-            aria-valuenow={Math.round(fightUi.progress * 100)}
-          >
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-cyan-300"
-              style={{ width: `${fightUi.progress * 100}%` }}
-            />
-          </div>
-          <div
-            className={`h-2.5 w-full overflow-hidden rounded-full bg-white/10 ${fightUi.surging ? "animate-pulse" : ""}`}
-            role="progressbar"
-            aria-label="Line tension"
-            aria-valuenow={Math.round(fightUi.tension * 100)}
-          >
-            <div
-              className={`h-full rounded-full ${fightUi.tension > 0.75 ? "bg-rose-500" : "bg-amber-300"}`}
-              style={{ width: `${fightUi.tension * 100}%` }}
-            />
-          </div>
-        </div>
-      )}
-      <div className={`mt-0 h-2.5 w-full overflow-hidden rounded-full bg-white/10 ${view.phase === "fight" ? "hidden" : ""}`}>
-        {view.phase === "bite" && view.cast && (
-          <div
-            className="timer-bar h-full rounded-full bg-gradient-to-r from-rose-400 to-amber-300"
-            style={{ animationDuration: `${view.cast.windowMs}ms` }}
-          />
-        )}
-      </div>
 
-          </div>
-        )}
-        <div className="absolute bottom-3 right-3 w-[62%]">
-      <button
-        type="button"
-        data-testid="action"
-        onPointerDown={handlePointerDown}
-        onClick={handleClick}
-        className={`h-16 w-full touch-manipulation select-none rounded-2xl text-xl font-extrabold tracking-wide transition-transform active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 ${view.phase === "fight" && (fightUi.surging || fightUi.warning) ? "bg-gradient-to-r from-rose-500 to-red-600 text-white" : BUTTON_STYLE[view.phase]}`}
-      >
-        {view.phase === "fight" && fightUi.surging
-          ? "HOLD OFF!"
-          : view.phase === "fight" && fightUi.warning
-            ? "EASY..."
-            : BUTTON_LABEL[view.phase]}
-      </button>
+        <p
+          aria-live="polite"
+          className="text-center text-sm font-bold text-moon [text-shadow:0_1px_3px_rgba(0,0,0,0.9),0_0_10px_rgba(0,0,0,0.7)]"
+        >
+          {STATUS_TEXT[view.phase]}
+        </p>
 
+        <div className="flex items-center justify-center gap-3">
+          <button
+            type="button"
+            data-testid="gear-open"
+            aria-label={`Gear: ${rod.name}, ${bait.name}`}
+            disabled={busy}
+            onClick={() => setGearOpen(true)}
+            className="btn btn-quiet flex h-14 w-14 shrink-0 items-center justify-center rounded-full p-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-moon"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={`/art/items/${rod.id}.png`} alt="" draggable={false} className="h-9 w-9 object-contain" />
+          </button>
+          <Button
+            variant={actionVariant}
+            data-testid="action"
+            onPointerDown={handlePointerDown}
+            onClick={handleClick}
+            className={`h-14 w-44 px-4 text-xl ${view.phase === "bite" ? "animate-pulse" : ""}`}
+          >
+            {actionLabel}
+          </Button>
+          <span className="w-14 shrink-0" aria-hidden="true" />
         </div>
       </div>
-      <button
-        type="button"
-        data-testid="gear-open"
-        disabled={busy}
-        onClick={() => setGearOpen(true)}
-        className="flex items-center justify-between gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 disabled:opacity-50"
-      >
-        <span className="truncate">
-          {location.name} · {rod.name} · {bait.name}
-          {loadout.accessoryIds.length > 0
-            ? ` · +${loadout.accessoryIds.length}`
-            : ""}
-        </span>
-        <span className={`shrink-0 text-sky-300 ${busy ? "invisible" : ""}`}>
-          Change
-        </span>
-      </button>
-
-      <p aria-live="polite" className="min-h-6 text-center text-sm text-slate-300">
-        {STATUS_TEXT[view.phase]}
-      </p>
 
       {gearOpen && (
-        <GearPanel
-          loadout={loadout}
-          onChange={changeLoadout}
-          onClose={() => setGearOpen(false)}
-        />
+        <GearPanel loadout={loadout} onChange={changeLoadout} onClose={() => setGearOpen(false)} />
       )}
+    </div>
+  );
+}
+
+function Meter({
+  label,
+  value,
+  fill,
+  alert,
+  mark,
+  testId,
+}: {
+  label: string;
+  value: number;
+  fill: string;
+  alert?: boolean;
+  mark?: number;
+  testId: string;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="font-display w-12 text-sm text-moon">{label}</span>
+      <div
+        data-testid={testId}
+        role="progressbar"
+        aria-label={label}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(value * 100)}
+        className={`relative h-4 flex-1 overflow-hidden rounded-full border-2 border-line bg-lake ${alert ? "animate-pulse" : ""}`}
+      >
+        <div className={`h-full rounded-full ${fill}`} style={{ width: `${value * 100}%` }} />
+        {mark !== undefined && (
+          <span aria-hidden className="absolute inset-y-0 w-0.5 bg-moon/70" style={{ left: `${mark * 100}%` }} />
+        )}
+      </div>
     </div>
   );
 }
