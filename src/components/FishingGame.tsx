@@ -111,6 +111,7 @@ export function FishingGame() {
   const timers = useRef<number[]>([]);
   const raf = useRef(0);
   const taps = useRef(0);
+  const [tapCount, setTapCount] = useState(0);
   const live = useRef<{ phase: ScenePhase; cast: Cast | null; biteAt: number }>({
     phase: "idle",
     cast: null,
@@ -208,6 +209,7 @@ export function FishingGame() {
       finish(cast, resolveCast(cast, -1));
     } else if (phase === "fight") {
       taps.current += 1;
+      setTapCount((n) => n + 1);
       if (typeof navigator.vibrate === "function") {
         navigator.vibrate(8);
       }
@@ -216,6 +218,7 @@ export function FishingGame() {
       if (hook === "hooked") {
         startFight(cast);
         taps.current = 1; // the tap that set the hook is the first reel tap
+        setTapCount((n) => n + 1);
       } else {
         finish(cast, resolveCast(cast, null));
       }
@@ -256,6 +259,10 @@ export function FishingGame() {
     <div data-phase={view.phase} className="flex flex-1 flex-col">
       <Scene
         phase={view.phase}
+        rodId={loadout.rodId}
+        taps={tapCount}
+        tension={fightUi.tension}
+        surging={fightUi.surging}
         eaten={
           view.phase === "result" &&
           (view.result?.outcome === "too-late" ||
@@ -303,12 +310,12 @@ export function FishingGame() {
 
         <p
           aria-live="polite"
-          className="text-center text-sm font-bold text-moon [text-shadow:0_1px_3px_rgba(0,0,0,0.9),0_0_10px_rgba(0,0,0,0.7)]"
+          className="text-right text-sm font-bold text-moon [text-shadow:0_1px_3px_rgba(0,0,0,0.9),0_0_10px_rgba(0,0,0,0.7)]"
         >
           {STATUS_TEXT[view.phase]}
         </p>
 
-        <div className="flex items-center justify-center gap-3">
+        <div className="flex items-center justify-end gap-3">
           <button
             type="button"
             data-testid="gear-open"
@@ -329,7 +336,6 @@ export function FishingGame() {
           >
             {actionLabel}
           </Button>
-          <span className="w-14 shrink-0" aria-hidden="true" />
         </div>
       </div>
 

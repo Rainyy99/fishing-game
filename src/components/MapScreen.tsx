@@ -35,9 +35,11 @@ export function MapScreen({ onGoFish }: { onGoFish: () => void }) {
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={`/art/maps/${location.id}.jpg`} alt="" draggable={false} className="h-full w-full object-cover" />
               )}
-              <span className="absolute right-2 top-2 rounded-full border-2 border-line bg-ink/90 px-2.5 py-0.5 text-[11px] font-extrabold text-moon">
-                {location.comingSoon ? "Coming soon" : current ? "You are here" : `Tier ${location.tier}`}
-              </span>
+              {(location.comingSoon || current) && (
+                <span className="absolute right-2 top-2 rounded-full border-2 border-line bg-ink/90 px-2.5 py-0.5 text-[11px] font-extrabold text-moon">
+                  {location.comingSoon ? "Coming soon" : "You are here"}
+                </span>
+              )}
             </div>
             <div className="p-3">
               <h3 className="font-display text-2xl leading-tight text-moon">{location.name}</h3>

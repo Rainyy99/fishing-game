@@ -163,9 +163,8 @@ export function GearList({ loadout, onChange }: GearListProps) {
             disabled={item.comingSoon}
             onClick={() => onChange({ ...loadout, locationId: item.id })}
             title={item.name}
-            tier={item.tier}
             description={item.description}
-            effects={compact([boostLabel(item.rarityBoost), item.comingSoon ? null : `${item.fish.length} fish`])}
+            effects={[]}
           />
         ))}
       </Section>
