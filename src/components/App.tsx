@@ -1,84 +1,20 @@
 "use client";
 
-import { useState } from "react";
-import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { GAME_NAME } from "@/game/brand";
-import { useSave } from "@/game/store";
+import { levelFromXp } from "@/game/progress";
+import { defaultName } from "@/game/save";
+import { updateSave, useSave } from "@/game/store";
 import { FishingGame } from "./FishingGame";
 import { InventoryScreen } from "./InventoryScreen";
 import { JournalScreen } from "./JournalScreen";
 import { MapScreen } from "./MapScreen";
+import { MenuPanel, type MenuTarget } from "./MenuPanel";
+import { ProfileScreen } from "./ProfileScreen";
 import { Scene } from "./Scene";
 import { Sheet } from "./ui/Sheet";
 
-type Tab = "fish" | "bag" | "book" | "map" | "shop";
-
-const ICONS: Record<Tab, ReactNode> = {
-  fish: <path d="M3 12c3-5 8-6 12-3l4-3v12l-4-3c-4 3-9 2-12-3zm13-1.5h.01" />,
-  bag: <path d="M6 8h12l1 12H5L6 8zm3 0V6a3 3 0 0 1 6 0v2" />,
-  book: <path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5zm2 14h13M9 7h6" />,
-  map: <path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2zm0 0v14m6-12v14" />,
-  shop: <path d="M4 9l1-5h14l1 5M4 9v11h16V9M4 9c0 2 3 2 4 0 1 2 3 2 4 0 1 2 3 2 4 0 1 2 4 2 4 0" />,
-};
-
-const TABS: ReadonlyArray<{ id: Tab; label: string; soon?: boolean }> = [
-  { id: "fish", label: "Fish" },
-  { id: "bag", label: "Inventory" },
-  { id: "book", label: "Collection" },
-  { id: "map", label: "Map" },
-  { id: "shop", label: "Shop", soon: true },
-];
-
-function TabBar({ tab, onChange }: { tab: Tab; onChange: (tab: Tab) => void }) {
-  return (
-    <nav aria-label="Main" className="plank fixed inset-x-0 bottom-0 z-40">
-      <div className="mx-auto flex max-w-md px-1 pb-[env(safe-area-inset-bottom)]">
-        {TABS.map((item) => {
-          const active = item.id === tab;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              data-testid={`tab-${item.id}`}
-              aria-current={active ? "page" : undefined}
-              onClick={() => onChange(item.id)}
-              className={`relative flex flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-moon ${
-                active ? "text-moon" : "text-[#e9c99a]/80"
-              }`}
-            >
-              <span
-                className={`flex h-8 w-12 items-center justify-center rounded-full border-3 transition-colors ${
-                  active
-                    ? "border-line bg-lantern text-line shadow-[0_0_18px_rgba(244,166,54,0.65)]"
-                    : "border-transparent"
-                }`}
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  className="h-6 w-6"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  {ICONS[item.id]}
-                </svg>
-              </span>
-              <span className="font-display text-[12px] leading-none">{item.label}</span>
-              {item.soon && (
-                <span className="absolute right-0 top-0.5 rounded-full bg-line px-1 py-px text-[8px] font-extrabold text-moon">
-                  Soon
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-    </nav>
-  );
-}
+type Tab = "fish" | "profile" | "bag" | "book" | "map" | "shop";
 
 function Coin() {
   return (
@@ -147,12 +83,33 @@ export function App() {
   const [tab, setTab] = useState<Tab>("fish");
   const [help, setHelp] = useState(false);
   const [ranks, setRanks] = useState(false);
-  const { points } = useSave();
+  const [menu, setMenu] = useState(false);
+  const { points, xp, name } = useSave();
+  useEffect(() => {
+    if (name === "") updateSave((save) => (save.name === "" ? { ...save, name: defaultName() } : save));
+  }, [name]);
+  const level = levelFromXp(xp).level;
+
+  const choose = (to: MenuTarget) => {
+    setMenu(false);
+    if (to === "ranks") setRanks(true);
+    else if (to === "help") setHelp(true);
+    else setTab(to);
+  };
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-3 px-4 pb-24 pt-4">
+    <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-3 px-4 pb-6 pt-4">
       <header className="flex items-center justify-between gap-3">
         <h1 className="lettered mr-auto text-3xl leading-none">{GAME_NAME}</h1>
+        <button
+          type="button"
+          data-testid="level-badge"
+          aria-label={`Level ${level}. Open profile`}
+          onClick={() => setTab("profile")}
+          className="font-display flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-3 border-line bg-lantern text-xl text-line shadow-[inset_0_0_0_1px_rgba(255,255,255,0.4)]"
+        >
+          {level}
+        </button>
         <div
           className="flex items-center gap-1.5 rounded-full border-3 border-line bg-lake py-1 pl-1.5 pr-3 shadow-[inset_0_0_0_1px_rgba(201,162,90,0.35)]"
           aria-label="Points"
@@ -164,28 +121,31 @@ export function App() {
         </div>
         <button
           type="button"
-          data-testid="ranks-open"
-          aria-label="Leaderboard"
-          onClick={() => setRanks(true)}
+          data-testid="menu-open"
+          aria-label="Menu"
+          aria-haspopup="dialog"
+          onClick={() => setMenu(true)}
           className="btn btn-quiet flex h-11 w-11 shrink-0 items-center justify-center p-0"
         >
-          <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M8 4h8v5a4 4 0 0 1-8 0V4zM5 5H3v2a3 3 0 0 0 3 3m13-5h2v2a3 3 0 0 1-3 3M12 13v4m-4 3h8" />
+          <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true">
+            <path d="M4 7h16M4 12h16M4 17h16" />
           </svg>
-        </button>
-        <button
-          type="button"
-          data-testid="help-open"
-          aria-label="How to play"
-          onClick={() => setHelp(true)}
-          className="btn btn-quiet flex h-11 w-11 shrink-0 items-center justify-center text-xl"
-        >
-          ?
         </button>
       </header>
 
+      {tab !== "fish" && (
+        <button
+          type="button"
+          data-testid="back-to-fishing"
+          onClick={() => setTab("fish")}
+          className="btn btn-quiet flex h-11 items-center gap-1.5 self-start px-4 text-base"
+        >
+          <span aria-hidden>←</span> Fishing
+        </button>
+      )}
       {tab !== "fish" && <Scene phase="idle" dim />}
-      {tab === "fish" && <FishingGame />}
+      {tab === "fish" && <FishingGame onOpenBag={() => setTab("bag")} />}
+      {tab === "profile" && <ProfileScreen />}
       {tab === "bag" && <InventoryScreen onGoFish={() => setTab("fish")} />}
       {tab === "book" && <JournalScreen />}
       {tab === "map" && <MapScreen onGoFish={() => setTab("fish")} />}
@@ -205,7 +165,7 @@ export function App() {
           Free-play beta · Progress is saved on this device
         </footer>
       )}
-      <TabBar tab={tab} onChange={setTab} />
+      {menu && <MenuPanel onSelect={choose} onClose={() => setMenu(false)} />}
       {ranks && (
         <Sheet title="Leaderboard" onClose={() => setRanks(false)} testId="ranks">
           <SoonScreen

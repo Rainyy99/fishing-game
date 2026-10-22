@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 import { LOCATIONS, RARITIES, RARITY_INFO, getLocation, type Rarity } from "@/game/data";
-import { rarityWeights, resolveStats } from "@/game/engine";
 import { JOURNAL } from "@/game/journal";
-import { ALL_FISH, discoveredCount, fishValue, sellFish, type BookFish } from "@/game/save";
+import { ALL_FISH, PLAYABLE_FISH, catchChance, discoveredCount, fishValue, sellFish, type BookFish } from "@/game/save";
 import { updateSave, useSave } from "@/game/store";
 import { FishArt } from "./FishArt";
 import { Button } from "./ui/Button";
@@ -17,12 +16,7 @@ type View = "collection" | "list";
 /** Chance that a single cast lands this exact species, with the equipped gear. */
 function useCatchChance() {
   const save = useSave();
-  const weights = rarityWeights(resolveStats(save.loadout).rarityBoost);
-  const total = RARITIES.reduce((sum, r) => sum + weights[r], 0);
-  return (fish: BookFish) => {
-    const same = getLocation(fish.locationId).fish.filter((f) => f.rarity === fish.rarity).length;
-    return (weights[fish.rarity] / total / same) * 100;
-  };
+  return (fish: BookFish) => catchChance(save.loadout, fish.id);
 }
 
 function FishDetail({ fish, onClose }: { fish: BookFish; onClose: () => void }) {
@@ -160,8 +154,7 @@ export function JournalScreen() {
   const [filter, setFilter] = useState<Rarity | "all">("all");
   const [open, setOpen] = useState<BookFish | null>(null);
   const found = discoveredCount(save);
-  const playable = LOCATIONS.filter((l) => !l.comingSoon);
-  const total = ALL_FISH.filter((f) => playable.some((l) => l.id === f.locationId)).length;
+  const total = PLAYABLE_FISH.length;
 
   return (
     <div className="flex flex-col gap-3">

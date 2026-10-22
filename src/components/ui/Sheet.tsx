@@ -10,13 +10,16 @@ interface SheetProps {
   children: ReactNode;
   testId?: string;
   closeTestId?: string;
+  /** "half" rises to about half the screen (menus); "full" is the tall default. */
+  size?: "half" | "full";
 }
 
 const FOCUSABLE = 'button:not(:disabled), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 /** Bottom sheet. Traps focus, closes on Escape or a tap outside, and gives focus back when it closes. */
-export function Sheet({ title, onClose, children, testId, closeTestId }: SheetProps) {
+export function Sheet({ title, onClose, children, testId, closeTestId, size = "full" }: SheetProps) {
   const ref = useRef<HTMLDivElement>(null);
+  const dragFrom = useRef<number | null>(null);
 
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
@@ -59,9 +62,19 @@ export function Sheet({ title, onClose, children, testId, closeTestId }: SheetPr
         tabIndex={-1}
         data-testid={testId}
         onClick={(e) => e.stopPropagation()}
-        className="sheet-in panel flex max-h-[90dvh] w-full max-w-md flex-col rounded-b-none outline-none"
+        className={`sheet-in panel flex w-full max-w-md flex-col rounded-b-none outline-none ${size === "half" ? "max-h-[62dvh]" : "max-h-[90dvh]"}`}
       >
-        <div className="flex items-center justify-between gap-3 border-b-2 border-line px-4 py-3">
+        <div
+          className="flex touch-none items-center justify-between gap-3 border-b-2 border-line px-4 py-3"
+          onTouchStart={(e) => {
+            dragFrom.current = e.touches[0].clientY;
+          }}
+          onTouchEnd={(e) => {
+            const from = dragFrom.current;
+            dragFrom.current = null;
+            if (from !== null && e.changedTouches[0].clientY - from > 60) onClose();
+          }}
+        >
           <h2 className="lettered text-2xl">{title}</h2>
           <Button size="sm" variant="quiet" data-testid={closeTestId} onClick={onClose}>
             Done

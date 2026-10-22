@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { MouseEvent, PointerEvent } from "react";
-import { RARITY_INFO, getBait, getRod } from "@/game/data";
+import { getBait, getRod } from "@/game/data";
 import {
   fightResult,
   resolveCast,
@@ -13,11 +13,11 @@ import {
   type Loadout,
 } from "@/game/engine";
 import { createFight, stepFight, type FightState } from "@/game/fight";
-import { applyCastResult, fishValue, withLoadout } from "@/game/save";
-import { updateSave, useSave } from "@/game/store";
+import { applyCastResult, catchChance, catchGain, withLoadout } from "@/game/save";
+import { getSnapshot, updateSave, useSave } from "@/game/store";
 import { FishArt } from "./FishArt";
 import { Button } from "./ui/Button";
-import { RarityTag } from "./ui/RarityTag";
+import { CatchCard, type CatchInfo } from "./CatchCard";
 import { GearPanel } from "./GearPanel";
 import { Scene, type ScenePhase } from "./Scene";
 
@@ -25,9 +25,13 @@ interface View {
   phase: ScenePhase;
   cast: Cast | null;
   result: CastResult | null;
+  /** What the catch earned, shown on the catch card. */
+  card: CatchInfo | null;
+  cardOpen: boolean;
+  toastOpen: boolean;
 }
 
-const INITIAL_VIEW: View = { phase: "idle", cast: null, result: null };
+const INITIAL_VIEW: View = { phase: "idle", cast: null, result: null, card: null, cardOpen: false, toastOpen: false };
 
 const STATUS_TEXT: Record<ScenePhase, string> = {
   idle: "Tap Cast to throw your line.",
@@ -45,19 +49,22 @@ const BUTTON_LABEL: Record<ScenePhase, string> = {
   result: "Cast again",
 };
 
-function ResultPanel({ cast, result }: { cast: Cast; result: CastResult }) {
-  const info = RARITY_INFO[cast.fish.rarity];
-  const caught = result.outcome === "caught";
+/** A small note for a cast that came to nothing. It fades by itself. */
+function ResultToast({ cast, result, onDone }: { cast: Cast; result: CastResult; onDone: () => void }) {
+  const [leaving, setLeaving] = useState(false);
+
+  useEffect(() => {
+    const fade = window.setTimeout(() => setLeaving(true), 3000);
+    const done = window.setTimeout(onDone, 3300);
+    return () => {
+      window.clearTimeout(fade);
+      window.clearTimeout(done);
+    };
+  }, [onDone]);
 
   let title: string;
   let body: string;
   switch (result.outcome) {
-    case "caught":
-      title = cast.fish.name;
-      body = caught && cast.fish.rarity !== "common" && cast.fish.rarity !== "uncommon"
-        ? `A ${info.label.toLowerCase()} catch. Nicely reeled.`
-        : "Added to your bag.";
-      break;
     case "escaped":
       title = "It got away";
       body = `The ${cast.fish.name} pulled free before you landed it. Tap faster when the bar is low.`;
@@ -70,40 +77,27 @@ function ResultPanel({ cast, result }: { cast: Cast; result: CastResult }) {
       title = "Bait eaten";
       body = `The ${cast.fish.name} took your bait and swam off. Tap as soon as you see the red !`;
       break;
-    case "too-early":
+    default:
       title = "Too early";
       body = "You pulled before the bite. Wait for the bobber to dip.";
-      break;
   }
 
   return (
-    <div
-      role="status"
-      className="result-in panel flex items-center gap-3 p-2.5"
-      style={caught ? { boxShadow: `inset 0 0 0 2px ${info.color}, 0 5px 0 rgba(0,0,0,0.28)` } : undefined}
-    >
+    <div role="status" className={`${leaving ? "toast-out" : "result-in"} panel flex items-center gap-3 p-2.5`}>
       {result.outcome !== "too-early" && (
-        <div className="flex h-16 w-24 shrink-0 items-center justify-center rounded-xl bg-ink/70">
-          <FishArt
-            fish={cast.fish}
-            className={`h-auto max-h-14 w-20 object-contain ${caught ? "" : "opacity-40 grayscale"}`}
-          />
+        <div className="flex h-14 w-20 shrink-0 items-center justify-center rounded-xl bg-ink/70">
+          <FishArt fish={cast.fish} className="h-auto max-h-12 w-16 object-contain opacity-40 grayscale" />
         </div>
       )}
       <div className="min-w-0 flex-1">
-        {caught && <RarityTag rarity={cast.fish.rarity} />}
-        <p className="lettered truncate text-2xl leading-tight" style={caught ? { color: info.color } : undefined}>
-          {title}
-        </p>
-        <p className="text-xs leading-snug text-mist">
-          {caught ? `${body} +${fishValue(cast.fish)} pts when sold.` : body}
-        </p>
+        <p className="lettered truncate text-xl leading-tight">{title}</p>
+        <p className="text-xs leading-snug text-mist">{body}</p>
       </div>
     </div>
   );
 }
 
-export function FishingGame() {
+export function FishingGame({ onOpenBag }: { onOpenBag?: () => void }) {
   const { loadout } = useSave();
   const [view, setView] = useState<View>(INITIAL_VIEW);
   const [gearOpen, setGearOpen] = useState(false);
@@ -135,8 +129,14 @@ export function FishingGame() {
       }
       clearTimers();
       live.current.phase = "result";
+      // Work out what the catch earns before it is saved, so the card can show it.
+      const before = getSnapshot();
+      const gain = result.outcome === "caught" ? catchGain(before, cast.fish.id) : null;
+      const card: CatchInfo | null = gain
+        ? { gain, xpBefore: before.xp, chance: catchChance(before.loadout, cast.fish.id) }
+        : null;
       updateSave((save) => applyCastResult(save, cast.fish.id, result.outcome));
-      setView((v) => ({ ...v, phase: "result", result }));
+      setView((v) => ({ ...v, phase: "result", result, card, cardOpen: card !== null, toastOpen: card === null }));
     },
     [clearTimers],
   );
@@ -177,7 +177,7 @@ export function FishingGame() {
     clearTimers();
     const cast = startCast(loadout);
     live.current = { phase: "waiting", cast, biteAt: 0 };
-    setView({ phase: "waiting", cast, result: null });
+    setView({ phase: "waiting", cast, result: null, card: null, cardOpen: false, toastOpen: false });
 
     timers.current.push(
       window.setTimeout(() => {
@@ -238,6 +238,13 @@ export function FishingGame() {
       act();
     }
   };
+
+  const closeToast = useCallback(() => setView((v) => ({ ...v, toastOpen: false })), []);
+  const closeCard = useCallback(() => setView((v) => ({ ...v, cardOpen: false })), []);
+  const castAgain = useCallback(() => {
+    setView((v) => ({ ...v, cardOpen: false }));
+    startNewCast();
+  }, [startNewCast]);
 
   const changeLoadout = (next: Loadout) =>
     updateSave((save) => withLoadout(save, next));
@@ -304,8 +311,8 @@ export function FishingGame() {
       </div>
 
       <div className="mt-auto flex flex-col gap-3">
-        {view.phase === "result" && view.cast && view.result && (
-          <ResultPanel cast={view.cast} result={view.result} />
+        {view.phase === "result" && view.cast && view.result && view.toastOpen && (
+          <ResultToast cast={view.cast} result={view.result} onDone={closeToast} />
         )}
 
         <p
@@ -316,6 +323,20 @@ export function FishingGame() {
         </p>
 
         <div className="flex items-center justify-end gap-3">
+          {onOpenBag && (
+            <button
+              type="button"
+              data-testid="bag-open"
+              aria-label="Inventory"
+              disabled={busy}
+              onClick={onOpenBag}
+              className="btn btn-quiet flex h-14 w-14 shrink-0 items-center justify-center rounded-full p-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-moon"
+            >
+              <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M6 8h12l1 12H5L6 8zm3 0V6a3 3 0 0 1 6 0v2" />
+              </svg>
+            </button>
+          )}
           <button
             type="button"
             data-testid="gear-open"
@@ -338,6 +359,10 @@ export function FishingGame() {
           </Button>
         </div>
       </div>
+
+      {view.phase === "result" && view.cardOpen && view.cast && view.card && (
+        <CatchCard fish={view.cast.fish} info={view.card} onCastAgain={castAgain} onClose={closeCard} />
+      )}
 
       {gearOpen && (
         <GearPanel loadout={loadout} onChange={changeLoadout} onClose={() => setGearOpen(false)} />
