@@ -241,10 +241,6 @@ export function FishingGame({ onOpenBag }: { onOpenBag?: () => void }) {
 
   const closeToast = useCallback(() => setView((v) => ({ ...v, toastOpen: false })), []);
   const closeCard = useCallback(() => setView((v) => ({ ...v, cardOpen: false })), []);
-  const castAgain = useCallback(() => {
-    setView((v) => ({ ...v, cardOpen: false }));
-    startNewCast();
-  }, [startNewCast]);
 
   const changeLoadout = (next: Loadout) =>
     updateSave((save) => withLoadout(save, next));
@@ -361,7 +357,7 @@ export function FishingGame({ onOpenBag }: { onOpenBag?: () => void }) {
       </div>
 
       {view.phase === "result" && view.cardOpen && view.cast && view.card && (
-        <CatchCard fish={view.cast.fish} info={view.card} onCastAgain={castAgain} onClose={closeCard} />
+        <CatchCard fish={view.cast.fish} info={view.card} onClose={closeCard} />
       )}
 
       {gearOpen && (

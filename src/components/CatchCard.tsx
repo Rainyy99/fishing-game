@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { RARITY_INFO, type Fish, type Rarity } from "@/game/data";
 import { fishValue } from "@/game/save";
@@ -27,7 +27,6 @@ export interface CatchInfo {
 interface CatchCardProps {
   fish: Fish;
   info: CatchInfo;
-  onCastAgain: () => void;
   onClose: () => void;
 }
 
@@ -40,10 +39,19 @@ function oddsText(chance: number) {
 }
 
 /** The catch screen: a sign, the fish on a ray burst, what it is worth, and the XP it earned. */
-export function CatchCard({ fish, info, onCastAgain, onClose }: CatchCardProps) {
+export function CatchCard({ fish, info, onClose }: CatchCardProps) {
   const { gain, xpBefore, chance } = info;
   const rarity = RARITY_INFO[fish.rarity];
   const ref = useRef<HTMLDivElement>(null);
+  // The last reel tap often lands as the card appears; ignore presses for a moment so it cannot dismiss the card.
+  const shownAt = useRef(0);
+  useEffect(() => {
+    shownAt.current = performance.now();
+  }, []);
+  const dismiss = useCallback(() => {
+    if (performance.now() - shownAt.current < 800) return;
+    onClose();
+  }, [onClose]);
 
   const [bar, setBar] = useState(() => {
     const before = levelFromXp(xpBefore);
@@ -77,7 +85,7 @@ export function CatchCard({ fish, info, onCastAgain, onClose }: CatchCardProps) 
     ref.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        onClose();
+        dismiss();
         return;
       }
       if (e.key !== "Tab" || !ref.current) return;
@@ -99,7 +107,7 @@ export function CatchCard({ fish, info, onCastAgain, onClose }: CatchCardProps) 
       document.body.style.overflow = overflow;
       previous?.focus?.();
     };
-  }, [onClose]);
+  }, [dismiss]);
 
   const sparkles = fish.rarity === "rare" || fish.rarity === "epic" || fish.rarity === "legendary";
   const levelUp = gain.levelAfter > gain.levelBefore;
@@ -107,14 +115,13 @@ export function CatchCard({ fish, info, onCastAgain, onClose }: CatchCardProps) 
   const into = Math.round(bar.fraction * needed);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div
         ref={ref}
         role="dialog"
         aria-modal="true"
         aria-label={`${CATCH_TITLE[fish.rarity]} ${fish.name}`}
         data-testid="catch-card"
-        onClick={(e) => e.stopPropagation()}
         className="catch-in panel relative mt-6 w-full max-w-sm px-4 pb-4 pt-10"
         style={{ boxShadow: `inset 0 0 0 2px ${rarity.color}, 0 6px 0 rgba(0,0,0,0.35), 0 0 36px ${rarity.color}44` }}
       >
@@ -128,16 +135,6 @@ export function CatchCard({ fish, info, onCastAgain, onClose }: CatchCardProps) 
             {CATCH_TITLE[fish.rarity]}
           </h2>
         </div>
-
-        <button
-          type="button"
-          aria-label="Close"
-          data-testid="catch-close"
-          onClick={onClose}
-          className="btn btn-quiet absolute -right-2 -top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full p-0 text-xl leading-none"
-        >
-          <span aria-hidden>×</span>
-        </button>
 
         {/* Fish on a ray burst */}
         <div className="relative mt-2 flex h-44 items-center justify-center overflow-hidden rounded-2xl">
@@ -245,8 +242,8 @@ export function CatchCard({ fish, info, onCastAgain, onClose }: CatchCardProps) 
           )}
         </div>
 
-        <Button variant="primary" className="mt-3 h-14 w-full text-xl" data-testid="catch-cast-again" onClick={onCastAgain}>
-          Cast again
+        <Button variant="primary" className="mt-3 h-14 w-full text-xl" data-testid="catch-continue" onClick={dismiss}>
+          Keep fishing
         </Button>
       </div>
     </div>
