@@ -1,6 +1,8 @@
 "use client";
 
-import { Angler, BOBBER, FISH_SPOT, REST_TIP } from "./Angler";
+import type { CSSProperties } from "react";
+import type { Fish } from "@/game/data";
+import { Angler, BOBBER, CAST_S, FISH_SPOT, REST_TIP } from "./Angler";
 
 export type ScenePhase = "idle" | "waiting" | "bite" | "fight" | "result";
 
@@ -16,6 +18,10 @@ interface SceneProps {
   taps?: number;
   tension?: number;
   surging?: boolean;
+  /** A fish just landed: it leaps out of the water at the hook spot. */
+  leap?: Fish | null;
+  /** A fish that got away: it bolts out of the water and flees. */
+  flee?: Fish | null;
 }
 
 /**
@@ -23,7 +29,7 @@ interface SceneProps {
  * rod, line and bobber sit on top in the painting's own coordinates, so they stay aligned.
  * `dim` darkens it behind menu screens.
  */
-export function Scene({ phase, eaten = false, dim = false, rodId = "bamboo-rod", taps = 0, tension = 0, surging = false }: SceneProps) {
+export function Scene({ phase, eaten = false, dim = false, rodId = "bamboo-rod", taps = 0, tension = 0, surging = false, leap = null, flee = null }: SceneProps) {
   const inWater = phase === "waiting" || phase === "bite" || phase === "fight";
   const biting = phase === "bite" || phase === "fight";
   const bite = phase === "bite";
@@ -54,7 +60,7 @@ export function Scene({ phase, eaten = false, dim = false, rodId = "bamboo-rod",
         >
           <Angler phase={phase} rodId={rodId} taps={taps} tension={tension} surging={surging} />
 
-          {!inWater && eaten &&
+          {!inWater && eaten && !flee?.art &&
             [
               [-14, 20, 4, 0],
               [4, 32, 3, 0.15],
@@ -74,7 +80,7 @@ export function Scene({ phase, eaten = false, dim = false, rodId = "bamboo-rod",
             ))}
 
           {inWater &&
-            (biting ? [0, 0.27, 0.54] : [0, 1.2]).map((delay) => {
+            (biting ? [0, 0.27, 0.54] : [CAST_S, CAST_S + 1.2]).map((delay) => {
               const spot = fighting ? FISH_SPOT : BOBBER;
               return (
                 <ellipse
@@ -85,6 +91,7 @@ export function Scene({ phase, eaten = false, dim = false, rodId = "bamboo-rod",
                   rx="34"
                   ry="10"
                   fill="none"
+                  opacity="0"
                   stroke="#bae6fd"
                   strokeWidth="3.5"
                   style={{ animationDelay: `${delay}s` }}
@@ -92,8 +99,14 @@ export function Scene({ phase, eaten = false, dim = false, rodId = "bamboo-rod",
               );
             })}
 
+          {leap?.art && <Leap key={leap.id} fish={leap} />}
+          {flee?.art && <Leap key={`flee-${flee.id}`} fish={flee} away />}
+
+          {phase === "waiting" && <Splash at={BOBBER} delay={CAST_S} small />}
+          {bite && <Splash at={BOBBER} delay={0} />}
+
           {(phase === "waiting" || bite) && (
-            <g transform={`translate(${BOBBER.x} ${BOBBER.y}) scale(2.36)`}>
+            <g transform={`translate(${BOBBER.x} ${BOBBER.y}) scale(2.36)`} className={bite ? undefined : "bobber-land"}>
               <g className={bite ? "bobber-bite" : "bobber-idle"}>
                 <path d="M0 -16 L0 -9" stroke="#f8fafc" strokeWidth="2" />
                 <path d="M-9 0 a9 9 0 0 0 18 0 z" fill="#f8fafc" stroke="#0d1b2a" strokeWidth="1.2" />
@@ -124,5 +137,72 @@ export function Scene({ phase, eaten = false, dim = false, rodId = "bamboo-rod",
         }}
       />
     </div>
+  );
+}
+
+const DROPS: ReadonlyArray<[number, number]> = [
+  [-80, -90],
+  [-40, -140],
+  [10, -155],
+  [60, -125],
+  [95, -70],
+  [-110, -45],
+];
+
+/** The caught fish arcs up from the hook spot toward the angler, with a splash where it left the water. */
+function Leap({ fish, away = false }: { fish: Fish; away?: boolean }) {
+  const { x, y } = FISH_SPOT;
+  return (
+    <g>
+      {[0, 0.12].map((delay) => (
+        <ellipse
+          key={delay}
+          className="ripple ripple-fast"
+          cx={x}
+          cy={y + 6}
+          rx="40"
+          ry="12"
+          fill="none"
+          stroke="#bae6fd"
+          strokeWidth="4"
+          style={{ animationDelay: `${delay}s` }}
+        />
+      ))}
+      <Splash at={FISH_SPOT} delay={0} />
+      <g transform={`translate(${x} ${y})`}>
+        <g className={away ? "flee" : "leap"} style={{ transformBox: "fill-box", transformOrigin: "center" }}>
+          {/* The painted fish faces right: a landed fish is flipped to head toward the angler, one that got away bolts off to the right. */}
+          <image
+            href={`/art/misty-lake/fish/${fish.art}.png`}
+            x="-100"
+            y="-75"
+            width="200"
+            height="150"
+            preserveAspectRatio="xMidYMid meet"
+            transform={away ? undefined : "scale(-1 1)"}
+          />
+        </g>
+      </g>
+    </g>
+  );
+}
+
+/** Water thrown up at a point: a handful of drops that fly out and fall back. */
+function Splash({ at, delay, small = false }: { at: { x: number; y: number }; delay: number; small?: boolean }) {
+  const k = small ? 0.55 : 1;
+  return (
+    <g>
+      {DROPS.map(([dx, dy]) => (
+        <circle
+          key={`${dx}-${dy}`}
+          className="drop"
+          cx={at.x}
+          cy={at.y}
+          r={small ? 6 : 11}
+          fill="#e0f2fe"
+          style={{ "--dx": `${dx * k}px`, "--dy": `${dy * k}px`, animationDelay: `${delay}s` } as CSSProperties}
+        />
+      ))}
+    </g>
   );
 }

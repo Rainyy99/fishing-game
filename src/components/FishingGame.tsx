@@ -29,9 +29,14 @@ interface View {
   card: CatchInfo | null;
   cardOpen: boolean;
   toastOpen: boolean;
+  /** The fish is leaping out of the water; the card follows when it lands. */
+  leaping: boolean;
 }
 
-const INITIAL_VIEW: View = { phase: "idle", cast: null, result: null, card: null, cardOpen: false, toastOpen: false };
+const INITIAL_VIEW: View = { phase: "idle", cast: null, result: null, card: null, cardOpen: false, toastOpen: false, leaping: false };
+
+/** How long the caught fish takes to leap before the card appears. */
+const LEAP_MS = 1050;
 
 const STATUS_TEXT: Record<ScenePhase, string> = {
   idle: "Tap Cast to throw your line.",
@@ -103,6 +108,7 @@ export function FishingGame({ onOpenBag }: { onOpenBag?: () => void }) {
   const [gearOpen, setGearOpen] = useState(false);
   const [fightUi, setFightUi] = useState({ tension: 0, progress: 0, surging: false, warning: false });
   const timers = useRef<number[]>([]);
+  const leaping = useRef(false);
   const raf = useRef(0);
   const taps = useRef(0);
   const [tapCount, setTapCount] = useState(0);
@@ -136,7 +142,17 @@ export function FishingGame({ onOpenBag }: { onOpenBag?: () => void }) {
         ? { gain, xpBefore: before.xp, chance: catchChance(before.loadout, cast.fish.id) }
         : null;
       updateSave((save) => applyCastResult(save, cast.fish.id, result.outcome));
-      setView((v) => ({ ...v, phase: "result", result, card, cardOpen: card !== null, toastOpen: card === null }));
+      const leap = card !== null && Boolean(cast.fish.art) && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      setView((v) => ({ ...v, phase: "result", result, card, cardOpen: card !== null && !leap, toastOpen: card === null, leaping: leap }));
+      leaping.current = leap;
+      if (leap) {
+        timers.current.push(
+          window.setTimeout(() => {
+            leaping.current = false;
+            setView((v) => ({ ...v, cardOpen: true, leaping: false }));
+          }, LEAP_MS),
+        );
+      }
     },
     [clearTimers],
   );
@@ -175,9 +191,10 @@ export function FishingGame({ onOpenBag }: { onOpenBag?: () => void }) {
 
   const startNewCast = useCallback(() => {
     clearTimers();
+    leaping.current = false;
     const cast = startCast(loadout);
     live.current = { phase: "waiting", cast, biteAt: 0 };
-    setView({ phase: "waiting", cast, result: null, card: null, cardOpen: false, toastOpen: false });
+    setView({ phase: "waiting", cast, result: null, card: null, cardOpen: false, toastOpen: false, leaping: false });
 
     timers.current.push(
       window.setTimeout(() => {
@@ -203,6 +220,9 @@ export function FishingGame({ onOpenBag }: { onOpenBag?: () => void }) {
 
   const act = useCallback(() => {
     const { phase, cast, biteAt } = live.current;
+    if (phase === "result" && leaping.current) {
+      return; // the fish is still in the air
+    }
     if (phase === "idle" || phase === "result") {
       startNewCast();
     } else if (phase === "waiting" && cast) {
@@ -262,6 +282,14 @@ export function FishingGame({ onOpenBag }: { onOpenBag?: () => void }) {
     <div data-phase={view.phase} className="flex flex-1 flex-col">
       <Scene
         phase={view.phase}
+        leap={view.leaping && view.cast ? view.cast.fish : null}
+        flee={
+          view.phase === "result" &&
+          view.cast &&
+          (view.result?.outcome === "escaped" || view.result?.outcome === "snapped" || view.result?.outcome === "too-late")
+            ? view.cast.fish
+            : null
+        }
         rodId={loadout.rodId}
         taps={tapCount}
         tension={fightUi.tension}

@@ -61,6 +61,8 @@ function rodShape(theta: number, bend: number) {
 const REST = rodShape(THETA0, 0);
 /** Where the rod tip rests, in painting coordinates. The bobber and fish spot hang off this. */
 export const REST_TIP = toScene(REST.tip.x, REST.tip.y);
+/** Seconds the hook spends in the air on a cast. */
+export const CAST_S = 0.6;
 export const BOBBER = { x: REST_TIP.x - 25, y: REST_TIP.y + 190 };
 export const FISH_SPOT = { x: REST_TIP.x + 25, y: REST_TIP.y + 280 };
 
@@ -108,6 +110,7 @@ export function Angler({ phase, rodId, taps, tension, surging }: AnglerProps) {
       lastTaps: live.current.taps,
       prev: live.current.phase,
       biteAt: -10,
+      castAt: -10,
       last: 0,
     };
     let raf = 0;
@@ -120,6 +123,7 @@ export function Angler({ phase, rodId, taps, tension, surging }: AnglerProps) {
 
       if (ph !== s.prev) {
         if (ph === "bite") s.biteAt = t;
+        if (ph === "waiting") s.castAt = t;
         s.prev = ph;
       }
       if (tp > s.lastTaps) s.vel = Math.min(s.vel + 3000, 4200);
@@ -179,7 +183,17 @@ export function Angler({ phase, rodId, taps, tension, surging }: AnglerProps) {
       const tip = toScene(shape.tip.x, shape.tip.y + breathe);
       let d: string;
       let end: { x: number; y: number };
-      if (ph === "waiting") {
+      let flying = false;
+      if (ph === "waiting" && !reduce && t - s.castAt < CAST_S) {
+        // The cast: the hook arcs from the rod tip out to the water, the line trailing behind it.
+        flying = true;
+        const u = (t - s.castAt) / CAST_S;
+        end = {
+          x: tip.x + (BOBBER.x - tip.x) * u + Math.sin(Math.PI * u) * 90,
+          y: tip.y + (BOBBER.y - tip.y) * u * u - Math.sin(Math.PI * u) * 170,
+        };
+        d = `M${tip.x} ${tip.y} Q${(tip.x + end.x) / 2} ${(tip.y + end.y) / 2 + 30} ${end.x} ${end.y}`;
+      } else if (ph === "waiting") {
         end = BOBBER;
         d = `M${tip.x} ${tip.y} Q${(tip.x + end.x) / 2 + 10} ${(tip.y + end.y) / 2 + 50} ${end.x} ${end.y}`;
       } else if (ph === "bite") {
@@ -194,7 +208,7 @@ export function Angler({ phase, rodId, taps, tension, surging }: AnglerProps) {
         d = `M${tip.x} ${tip.y} Q${tip.x + 6} ${tip.y + 40} ${end.x} ${end.y}`;
       }
       set("line", "d", d);
-      const showHook = ph === "idle" || ph === "result";
+      const showHook = ph === "idle" || ph === "result" || flying;
       set("hook", "opacity", showHook ? "1" : "0");
       set("hook", "cx", String(end.x));
       set("hook", "cy", String(end.y));
